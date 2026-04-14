@@ -55,6 +55,8 @@ const CONFIG = {
     radialBars: 90, radialRadius: 0.25,
     // Center shape
     shape: 'circle',     // key from SHAPES, 'random', 'custom', or 'svg-N'
+    randomChangeChance: 60, // 0..100 chance to change shape on emphasis
+    randomChangeCooldown: 20, // minimum frames between random shape changes
     hollowShape: false,  // fill shape with bgColor instead of fillColor
     barStyle: 'bars',    // 'bars' | 'mirror'
     // Shape colors (null = use palette, or hex string for custom)
@@ -94,6 +96,7 @@ const STATE = {
     rotationAngle: 0,   // current rotation angle in radians
     // Shape state
     currentRandomShape: 'circle',  // current shape when in random mode
+    randomShapeCooldown: 0,        // frames remaining before next random shape change is allowed
     customSvgPath: null,           // Path2D from uploaded SVG
     customSvgScale: 1,             // scale factor for custom SVG to fit radius
     // SVG edge distance cache (normalized, recomputed on shape change)
