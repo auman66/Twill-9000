@@ -21,23 +21,23 @@ class AudioEngine {
         this.freq = new Uint8Array(this.analyser.frequencyBinCount);
         this.wave = new Uint8Array(this.analyser.fftSize);
         this.mic = null;
-        this.el.addEventListener('ended', () => { STATE.playing = false; UI.updatePlay(); });
-        this.el.addEventListener('timeupdate', () => UI.updateSeek());
+        this.el.addEventListener('ended', () => { STATE.playing = false; if (typeof UI !== 'undefined' && UI.updatePlay) UI.updatePlay(); });
+        this.el.addEventListener('timeupdate', () => { if (typeof UI !== 'undefined' && UI.updateSeek) UI.updateSeek(); });
     }
     resume() { if (this.ctx.state === 'suspended') this.ctx.resume(); }
     playFile(url) {
         this.resume(); this.stopMic();
         this.el.src = url;
-        this.el.play().then(() => { STATE.playing = true; UI.updatePlay(); UI.toast('Audio loaded'); }).catch(e => UI.toast('Error: ' + e.message));
+        this.el.play().then(() => { STATE.playing = true; if (typeof UI !== 'undefined' && UI.updatePlay) UI.updatePlay(); if (typeof UI !== 'undefined' && UI.toast) UI.toast('Audio loaded'); }).catch(e => { if (typeof UI !== 'undefined' && UI.toast) UI.toast('Error: ' + e.message); });
     }
     toggle() {
         this.resume();
         if (this.mic) return;
-        if (!this.el.src) { UI.toast('Load audio first'); return; }
+        if (!this.el.src) { if (typeof UI !== 'undefined' && UI.toast) UI.toast('Load audio first'); return; }
         if (this.el.paused) { this.el.play(); STATE.playing = true; } else { this.el.pause(); STATE.playing = false; }
-        UI.updatePlay();
+        if (typeof UI !== 'undefined' && UI.updatePlay) UI.updatePlay();
     }
-    stop() { this.el.pause(); this.el.currentTime = 0; STATE.playing = false; UI.updatePlay(); }
+    stop() { this.el.pause(); this.el.currentTime = 0; STATE.playing = false; if (typeof UI !== 'undefined' && UI.updatePlay) UI.updatePlay(); }
     async startMic() {
         this.resume(); this.stop();
         try {
@@ -45,15 +45,24 @@ class AudioEngine {
             this.mic = this.ctx.createMediaStreamSource(stream);
             this.mic.connect(this.analyser);
             STATE.playing = true;
-            document.getElementById('btn-mic').classList.add('active');
-            UI.toast('Mic active');
-        } catch(e) { UI.toast('Mic denied'); }
+            const btn = document.getElementById('btn-mic');
+            if (btn) btn.classList.add('active');
+            if (typeof UI !== 'undefined' && UI.toast) UI.toast('Mic active');
+        } catch(e) { if (typeof UI !== 'undefined' && UI.toast) UI.toast('Mic denied'); }
     }
-    stopMic() { if (this.mic) { this.mic.disconnect(); this.mic = null; document.getElementById('btn-mic').classList.remove('active'); } }
+    stopMic() {
+        if (this.mic) {
+            this.mic.disconnect();
+            this.mic = null;
+            const btn = document.getElementById('btn-mic');
+            if (btn) btn.classList.remove('active');
+        }
+    }
     update() {
         this.analyser.fftSize = CONFIG.fftSize;
         this.analyser.smoothingTimeConstant = CONFIG.smoothing;
-        this.gain.gain.value = parseFloat(document.getElementById('vol-slider').value);
+        const volSlider = document.getElementById('vol-slider');
+        if (volSlider) this.gain.gain.value = parseFloat(volSlider.value);
         if (this.freq.length !== this.analyser.frequencyBinCount) {
             this.freq = new Uint8Array(this.analyser.frequencyBinCount);
             this.wave = new Uint8Array(this.analyser.fftSize);

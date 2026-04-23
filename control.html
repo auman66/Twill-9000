@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Twill 9000 Control</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+    <link rel="stylesheet" href="css/visualizer.css">
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="sidebar">
+        <button id="toggle-sidebar" title="Toggle sidebar">◀</button>
+        <div class="panel-content">
+
+        <div class="section">
+            <h3>Audio Source</h3>
+            <div class="btn-row">
+                <button class="btn" id="btn-upload">Upload File</button>
+                <button class="btn" id="btn-mic">Mic</button>
+            </div>
+            <div class="btn-row">
+                <button class="btn" id="btn-play">▶ Play</button>
+                <button class="btn" id="btn-stop">■ Stop</button>
+            </div>
+            <div class="row"><label>Volume</label><input type="range" id="vol-slider" min="0" max="1.5" step="0.05" value="0.8"><input type="number" id="vol-slider-num" min="0" max="1.5" step="0.05" value="0.8"></div>
+            <div class="row"><label>Seek</label><input type="range" id="seek-bar" min="0" max="100" value="0" step="0.1"></div>
+            <div class="status" id="status-text">No audio loaded</div>
+            <input type="file" id="file-input" accept="audio/*,.json">
+        </div>
+
+        <div class="section">
+            <h3>Center Shape</h3>
+            <div class="row"><label>Visible</label><label class="toggle"><input type="checkbox" id="s-fx-show-shape" checked><span></span></label></div>
+
+            <div class="shape-label">Pick Shape</div>
+            <div class="shape-grid" id="shape-grid"></div>
+            <div class="btn-row">
+                <button class="btn" id="btn-shape-random">Random</button>
+                <button class="btn" id="btn-shape-upload">Upload SVG</button>
+            </div>
+            <input type="file" id="svg-file-input" accept=".svg" style="display:none;">
+
+            <div class="shape-label" style="margin-top:8px;">Shape Size & Position</div>
+            <div class="row"><label>Size</label><input type="range" id="s-radial-radius" min="0.1" max="0.5" step="0.05" value="0.25"><input type="number" id="s-radial-radius-num" min="0.1" max="0.5" step="0.05" value="0.25"></div>
+            <div class="row"><label>Hollow</label><label class="toggle"><input type="checkbox" id="s-hollow"><span></span></label></div>
+            <div class="row"><label>Border Gap</label><input type="range" id="s-ring-separation" min="0" max="1" step="0.05" value="0.5"><input type="number" id="s-ring-separation-num" min="0" max="1" step="0.05" value="0.5"></div>
+
+            <div class="shape-label" style="margin-top:8px;">Shape Colors</div>
+            <div class="color-row">
+                <label>Fill</label>
+                <input type="color" id="s-shape-fill-color" value="#ef213a">
+                <label class="toggle"><input type="checkbox" id="s-shape-fill-auto"><span></span></label>
+                <label style="font-size:10px;color:var(--dim)">Auto</label>
+            </div>
+            <div class="color-row">
+                <label>Border</label>
+                <input type="color" id="s-shape-stroke-color" value="#1866ee">
+                <label class="toggle"><input type="checkbox" id="s-shape-stroke-auto"><span></span></label>
+                <label style="font-size:10px;color:var(--dim)">Auto</label>
+            </div>
+
+            <div class="shape-label" style="margin-top:8px;">Random Shape Cycling</div>
+            <div class="row"><label>Cycle Speed</label><input type="range" id="s-shape-speed" min="0.1" max="5" step="0.1" value="1"><input type="number" id="s-shape-speed-num" min="0.1" max="5" step="0.1" value="1"></div>
+            <div class="row"><label>Change Point</label><input type="range" id="s-shape-change-point" min="0.05" max="0.6" step="0.01" value="0.3"><input type="number" id="s-shape-change-point-num" min="0.05" max="0.6" step="0.01" value="0.3"></div>
+
+            <div class="shape-label" style="margin-top:8px;">Radial Equalizer</div>
+            <div class="row"><label>Show EQ</label><label class="toggle"><input type="checkbox" id="s-fx-show-bars" checked><span></span></label></div>
+            <div class="row"><label>EQ Style</label>
+                <select id="s-bar-style">
+                    <option value="bars">Outward</option>
+                    <option value="mirror">Mirror</option>
+                </select>
+            </div>
+            <div class="row"><label>Segments</label><input type="range" id="s-radial-bars" min="6" max="180" step="2" value="90"><input type="number" id="s-radial-bars-num" min="6" max="180" step="2" value="90"></div>
+            <div class="row"><label>Thickness</label><input type="range" id="s-fx-bar-width" min="1" max="30" step="1" value="4"><input type="number" id="s-fx-bar-width-num" min="1" max="30" step="1" value="4"></div>
+            <div class="row"><label>Rounded</label><label class="toggle"><input type="checkbox" id="s-fx-rounded-bars"><span></span></label></div>
+            <div class="row"><label>Gradient</label><label class="toggle"><input type="checkbox" id="s-fx-gradient-bars"><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:8px;">Shape Animation</div>
+            <div class="row"><label>Rotate</label><label class="toggle"><input type="checkbox" id="s-fx-rotate"><span></span></label></div>
+            <div class="row"><label>Rotate Speed</label><input type="range" id="s-fx-rotate-speed" min="0.05" max="2.0" step="0.05" value="0.3"><input type="number" id="s-fx-rotate-speed-num" min="0.05" max="2.0" step="0.05" value="0.3"></div>
+            <div class="row"><label>Burst Rings</label><label class="toggle"><input type="checkbox" id="s-fx-pulse-rings"><span></span></label></div>
+            <div class="row"><label>Particles</label><label class="toggle"><input type="checkbox" id="s-fx-particles"><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:8px;">Shape Reactivity</div>
+            <div class="row"><label>Voice Mode</label><label class="toggle"><input type="checkbox" id="s-voice-mode" checked><span></span></label></div>
+            <div class="row"><label>Sensitivity</label><input type="range" id="s-sensitivity" min="0.1" max="4.0" step="0.1" value="1.5"><input type="number" id="s-sensitivity-num" min="0.1" max="4.0" step="0.1" value="1.5"></div>
+            <div class="row"><label>Smoothing</label><input type="range" id="s-smoothing" min="0.5" max="0.98" step="0.01" value="0.92"><input type="number" id="s-smoothing-num" min="0.5" max="0.98" step="0.01" value="0.92"></div>
+        </div>
+
+        <div class="section">
+            <h3>Pulse Lines</h3>
+            <div class="row"><label>Visible</label><label class="toggle"><input type="checkbox" id="s-fx-pulse-lines" checked><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:4px;">Style & Layout</div>
+            <div class="row"><label>Wave Style</label>
+                <select id="s-fx-pulse-line-style">
+                    <option value="smooth">Smooth Wave</option>
+                    <option value="sharp">Sharp Peaks</option>
+                    <option value="blocks">LED Blocks</option>
+                    <option value="helix">Double Helix</option>
+                    <option value="scatter">Sparks</option>
+                    <option value="ribbon">Ribbon Fill</option>
+                    <option value="segments">Laser Segments</option>
+                    <option value="sine">Oscilloscope</option>
+                    <option value="noise">Static / Glitch</option>
+                    <option value="heartbeat">Heartbeat EKG</option>
+                </select>
+            </div>
+            <div class="row"><label>Spread</label>
+                <select id="s-fx-pulse-line-layout">
+                    <option value="center">From Center</option>
+                    <option value="full">Full Width</option>
+                </select>
+            </div>
+            <div class="row"><label>Mirror</label><label class="toggle"><input type="checkbox" id="s-fx-pulse-line-mirror" checked><span></span></label></div>
+            <div class="row"><label>Fill Between</label><label class="toggle"><input type="checkbox" id="s-fx-pulse-line-fill" checked><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:8px;">Appearance</div>
+            <div class="row"><label>Thickness</label><input type="range" id="s-fx-pulse-line-width" min="1" max="6" step="0.5" value="2"><input type="number" id="s-fx-pulse-line-width-num" min="1" max="6" step="0.5" value="2"></div>
+            <div class="row"><label>Intensity</label><input type="range" id="s-fx-pulse-line-intensity" min="0.1" max="2" step="0.1" value="0.8"><input type="number" id="s-fx-pulse-line-intensity-num" min="0.1" max="2" step="0.1" value="0.8"></div>
+            <div class="color-row">
+                <label>Color</label>
+                <input type="color" id="s-fx-pulse-line-color" value="#1866ee">
+                <label class="toggle"><input type="checkbox" id="s-fx-pulse-line-color-auto" checked><span></span></label>
+                <label style="font-size:10px;color:var(--dim)">Auto</label>
+            </div>
+
+            <div class="shape-label" style="margin-top:8px;">Reactivity</div>
+            <div class="row"><label>Sensitivity</label><input type="range" id="s-fx-pulse-line-sensitivity" min="0.1" max="4.0" step="0.1" value="1.5"><input type="number" id="s-fx-pulse-line-sensitivity-num" min="0.1" max="4.0" step="0.1" value="1.5"></div>
+            <div class="row"><label>Smoothing</label><input type="range" id="s-fx-pulse-line-smoothing" min="0.5" max="0.98" step="0.01" value="0.85"><input type="number" id="s-fx-pulse-line-smoothing-num" min="0.5" max="0.98" step="0.01" value="0.85"></div>
+        </div>
+
+        <div class="section">
+            <h3>Scene</h3>
+            <div class="shape-label">Background</div>
+            <div class="row"><label>Color</label><input type="color" id="s-bg-color" value="#050505" style="width:50px;height:26px;border:1px solid var(--border);background:none;cursor:pointer;"></div>
+            <button class="btn" id="btn-bg-image">Set Background Image</button>
+            <button class="btn" id="btn-bg-clear" style="display:none;">Clear Background Image</button>
+            <input type="file" id="bg-file-input" accept="image/*">
+
+            <div class="shape-label" style="margin-top:8px;">Post Effects</div>
+            <div class="row"><label>Glow</label><label class="toggle"><input type="checkbox" id="s-fx-glow"><span></span></label></div>
+            <div class="row"><label>Glow Strength</label><input type="range" id="s-fx-glow-strength" min="5" max="60" step="1" value="20"><input type="number" id="s-fx-glow-strength-num" min="5" max="60" step="1" value="20"></div>
+            <div class="row"><label>Motion Trails</label><label class="toggle"><input type="checkbox" id="s-fx-trails"><span></span></label></div>
+            <div class="row"><label>Trail Fade</label><input type="range" id="s-fx-trail-alpha" min="0.02" max="0.4" step="0.01" value="0.12"><input type="number" id="s-fx-trail-alpha-num" min="0.02" max="0.4" step="0.01" value="0.12"></div>
+            <div class="row"><label>Vignette</label><label class="toggle"><input type="checkbox" id="s-fx-vignette"><span></span></label></div>
+            <div class="row"><label>BG Pulse</label><label class="toggle"><input type="checkbox" id="s-fx-bg-pulse"><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:8px;">Color Palette</div>
+            <div class="row"><label>Palette</label>
+                <select id="s-palette">
+                    <option value="cyan">Cyan / Pink</option>
+                    <option value="fire">Fire</option>
+                    <option value="ocean">Ocean</option>
+                    <option value="sunset">Sunset</option>
+                    <option value="arctic">Arctic</option>
+                    <option value="gold">Gold</option>
+                    <option value="white">White</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Export</h3>
+            <div class="shape-label">Capture</div>
+            <button class="btn" id="btn-screenshot">Screenshot (PNG)</button>
+            <button class="btn" id="btn-screenshot-alpha">Screenshot (Transparent)</button>
+            <div class="shape-label" style="margin-top:8px;">Record</div>
+            <button class="btn" id="btn-record-video">Record Video</button>
+            <button class="btn" id="btn-record-png">Record PNG Sequence</button>
+            <div class="shape-label" style="margin-top:8px;">Data</div>
+            <button class="btn" id="btn-export-json">Export Frame Data (JSON)</button>
+            <div class="status" id="export-status"></div>
+        </div>
+
+        <div class="section">
+            <h3>Presets</h3>
+            <button class="btn" id="btn-save-preset">Save Preset</button>
+            <button class="btn" id="btn-load-preset">Load Preset</button>
+            <button class="btn" id="btn-reset-settings">Reset to Defaults</button>
+            <input type="file" id="preset-file-input" accept=".json">
+        </div>
+
+        <div class="status" style="text-align:center;margin-top:8px;">Twill 9000 Stage v3.0</div>
+        </div>
+    </div>
+
+    <div id="drop-overlay">Drop audio file here</div>
+    <div id="toast-container"></div>
+
+    <!-- Scripts loaded in dependency order -->
+    <script src="js/config.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/visualizer-engine.js"></script>
+    <script src="js/exporter.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

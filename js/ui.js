@@ -400,8 +400,7 @@ const UI = {
 
     // Save current CONFIG as a JSON file download
     savePreset() {
-        const data = JSON.parse(JSON.stringify(CONFIG));
-        delete data.bgImage; // not serializable
+        const data = CONFIG_UTILS.snapshot(CONFIG);
         const json = JSON.stringify(data, null, 2);
         const blob = new Blob([json], { type: 'application/json' });
         const a = document.createElement('a');
@@ -414,12 +413,8 @@ const UI = {
 
     // Apply a config object to CONFIG and sync all UI controls
     applyConfig(data) {
-        // Deep merge: handle nested fx object
-        if (data.fx) {
-            Object.assign(CONFIG.fx, data.fx);
-            delete data.fx;
-        }
-        Object.assign(CONFIG, data);
+        if (!data) return;
+        CONFIG_UTILS.deepMerge(CONFIG, data);
 
         // Sync all UI controls to match CONFIG
         this.syncUIFromConfig();
@@ -507,8 +502,7 @@ const UI = {
     // Auto-save to localStorage
     saveToStorage() {
         try {
-            const data = JSON.parse(JSON.stringify(CONFIG));
-            delete data.bgImage;
+            const data = CONFIG_UTILS.snapshot(CONFIG);
             localStorage.setItem('twill9000_settings', JSON.stringify(data));
         } catch(e) { /* silent fail */ }
     },

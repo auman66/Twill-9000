@@ -123,3 +123,36 @@ const MODE_NAMES = ['Radial EQ'];
 
 // Deep copy of CONFIG defaults for reset
 const DEFAULT_CONFIG = JSON.parse(JSON.stringify(CONFIG));
+
+// ============================================================
+// CONFIG HELPERS
+// Shared between control.html (UI.applyConfig) and stage.html
+// (stage-bridge.js). Keep pure: no DOM, no side effects.
+// ============================================================
+const CONFIG_UTILS = {
+    // Deep-merge `patch` into `target` in place, recursing only into
+    // plain objects. Arrays and primitives replace wholesale.
+    // Unknown keys are allowed (forward-compat), but we won't create
+    // new nested objects for keys the target doesn't already know.
+    deepMerge(target, patch) {
+        if (!patch || typeof patch !== 'object') return target;
+        for (const k of Object.keys(patch)) {
+            const pv = patch[k];
+            const tv = target[k];
+            if (pv && typeof pv === 'object' && !Array.isArray(pv)
+                && tv && typeof tv === 'object' && !Array.isArray(tv)) {
+                this.deepMerge(tv, pv);
+            } else {
+                target[k] = pv;
+            }
+        }
+        return target;
+    },
+
+    // Serialize CONFIG safely for preset export (drops non-JSON fields).
+    snapshot(cfg) {
+        const data = JSON.parse(JSON.stringify(cfg));
+        delete data.bgImage;
+        return data;
+    }
+};
