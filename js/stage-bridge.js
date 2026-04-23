@@ -110,9 +110,17 @@
                 break;
             case 'viz:start-mic':
                 audio.startMic();
+                stopTestTone();
                 break;
             case 'viz:stop-mic':
                 audio.stopMic();
+                break;
+            case 'viz:play-test-tone':
+                audio.stopMic();
+                startTestTone();
+                break;
+            case 'viz:stop-test-tone':
+                stopTestTone();
                 break;
             case 'viz:ping':
                 post({ type: 'viz:pong', at: Date.now() });
@@ -199,6 +207,64 @@
             shapes: ['circle', 'random']
                 .concat(SVG_SHAPES.map((s) => 'svg-' + s.id))
         });
+    }
+
+    // -------- test tone --------
+    // A simple internal oscillator feeding the shared AnalyserNode
+    // so the visualizer reacts even when there's no mic / no call.
+    // Good for soundcheck. Modulates gain at ~3 Hz so it looks
+    // like speech to the emphasis detector.
+    let testTone = null;
+
+    function startTestTone() {
+        stopTestTone();
+        const ctx = audio.ctx;
+        const now = ctx.currentTime;
+        // A minor arpeggio (A3, C4, E4) with a slow LFO on gain.
+        const freqs = [220, 261.63, 329.63];
+        const osc = freqs.map((f) => {
+            const o = ctx.createOscillator();
+            o.type = 'sine';
+            o.frequency.setValueAtTime(f, now);
+            return o;
+        });
+        const toneGain = ctx.createGain();
+        toneGain.gain.value = 0;
+        // Speech-like envelope via an LFO modulating gain.
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(3, now); // 3 Hz syllable rate
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 0.18; // peak amplitude
+        lfo.connect(lfoGain);
+        lfoGain.connect(toneGain.gain);
+        // Add a small DC offset so the tone is never fully silent.
+        const dc = ctx.createConstantSource();
+        dc.offset.setValueAtTime(0.12, now);
+        dc.connect(toneGain.gain);
+
+        osc.forEach((o) => o.connect(toneGain));
+        // Route INTO the analyser (so the visualizer sees it) AND
+        // to the destination so the operator can hear it.
+        toneGain.connect(audio.analyser);
+        toneGain.connect(audio.gain);
+
+        osc.forEach((o) => o.start(now));
+        lfo.start(now);
+        dc.start(now);
+
+        testTone = { osc, lfo, dc, gain: toneGain };
+        STATE.playing = true;
+    }
+
+    function stopTestTone() {
+        if (!testTone) return;
+        const { osc, lfo, dc, gain } = testTone;
+        try { osc.forEach((o) => o.stop()); } catch (_) { /* ignore */ }
+        try { lfo.stop(); } catch (_) { /* ignore */ }
+        try { dc.stop(); } catch (_) { /* ignore */ }
+        try { gain.disconnect(); } catch (_) { /* ignore */ }
+        testTone = null;
     }
 
     function post(msg) {
