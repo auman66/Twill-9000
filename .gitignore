@@ -1,0 +1,36 @@
+# Generated media: batch outputs, recordings, PNG sequences, manifests, scripts.
+# Keep the folder structure intact for workflow clarity; ignore the contents.
+exports/**
+!exports/.gitkeep
+!exports/README.md
+
+# Browser / OS detritus
+.DS_Store
+Thumbs.db
+
+# Editor local state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node / tooling (if anyone adds tooling later)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Anything ephemeral downloaded during testing
+*.webm
+*.mov
+*.mp4
+*.mp3
+*.zip
+batch_manifest_*.json
+convert-all_*.sh
+twill9000_*
+
+# Keep the shipped templates tracked even if they match the patterns above.
+!batch-example.csv
+!batch-example-overrides.csv

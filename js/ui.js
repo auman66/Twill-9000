@@ -22,6 +22,8 @@ const UI = {
         document.getElementById('btn-play').onclick = () => audio.toggle();
         document.getElementById('btn-stop').onclick = () => audio.stop();
         document.getElementById('btn-mic').onclick = () => { audio.mic ? audio.stopMic() : audio.startMic(); };
+        document.getElementById('btn-play-record').onclick = () => this.playAndRecord('video');
+        document.getElementById('btn-play-record-alpha').onclick = () => this.playAndRecord('png-alpha');
         document.getElementById('seek-bar').oninput = e => { if (audio.el.duration) audio.el.currentTime = (e.target.value/100)*audio.el.duration; };
         const volSlider = document.getElementById('vol-slider');
         const volNum = document.getElementById('vol-slider-num');
@@ -270,12 +272,37 @@ const UI = {
             document.getElementById('btn-bg-clear').style.display = 'none';
             this.toast('Background cleared');
         };
+        // Chromakey preset: pure green background, clears bg image, disables
+        // post-effects that would stain the green (BG pulse / vignette). The
+        // record flows work normally \u2014 in post we chromakey the green out
+        // with ffmpeg to produce a real transparent video.
+        document.getElementById('btn-bg-chromakey').onclick = () => {
+            CONFIG.bgColor = '#00ff00';
+            document.getElementById('s-bg-color').value = '#00ff00';
+            STATE.bgImageEl = null;
+            document.getElementById('btn-bg-clear').style.display = 'none';
+            // Kill effects that tint the green (would defeat chromakey).
+            CONFIG.fx.bgPulse = false;
+            CONFIG.fx.vignette = false;
+            const syncToggle = (id, val) => {
+                const el = document.getElementById(id);
+                if (el && el.type === 'checkbox') el.checked = val;
+            };
+            syncToggle('s-fx-bg-pulse', false);
+            syncToggle('s-fx-vignette', false);
+            this.saveToStorage();
+            this.toast('Chromakey preset on. Record as usual, then assemble with the "green-screen" toggle.');
+        };
 
         // Export buttons
         document.getElementById('btn-screenshot').onclick = () => Exporter.screenshot(false);
         document.getElementById('btn-screenshot-alpha').onclick = () => Exporter.screenshot(true);
         document.getElementById('btn-record-video').onclick = () => Exporter.startVideo();
         document.getElementById('btn-record-png').onclick = () => Exporter.startPng();
+        const pngAlphaToggle = document.getElementById('s-png-alpha');
+        if (pngAlphaToggle) {
+            pngAlphaToggle.onchange = e => { STATE.pngAlpha = e.target.checked; };
+        }
         document.getElementById('btn-export-json').onclick = () => { STATE.recordingJson ? Exporter.stopJson() : Exporter.startJson(); };
 
         // Settings: save/load/reset
@@ -303,6 +330,12 @@ const UI = {
         // Restore from localStorage on init
         this.loadFromStorage();
 
+        // Init TTS module (restores API key / voice / script, wires buttons)
+        if (typeof TTS !== 'undefined') TTS.init();
+        if (typeof Assembler !== 'undefined') Assembler.init();
+        if (typeof Chromakey !== 'undefined') Chromakey.init();
+        if (typeof Batch !== 'undefined') Batch.init();
+
         // Drag & drop
         window.ondragover = e => { e.preventDefault(); document.getElementById('drop-overlay').style.display='flex'; };
         window.ondragleave = e => { if(!e.relatedTarget) document.getElementById('drop-overlay').style.display='none'; };
@@ -310,7 +343,8 @@ const UI = {
 
         // Keyboard
         document.addEventListener('keydown', e => {
-            if (e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+            const tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
             if (e.code==='Space') { e.preventDefault(); audio.toggle(); }
             if (e.code==='KeyM') { STATE.mode = (STATE.mode+1)%MODE_NAMES.length; this.updateMode(); }
         });
@@ -326,8 +360,110 @@ const UI = {
             }; r.readAsText(file);
         } else {
             audio.playFile(URL.createObjectURL(file));
+            STATE.lastAudioSource = { blob: file, filename: file.name };
             document.getElementById('status-text').textContent = file.name.length > 25 ? file.name.slice(0,25)+'...' : file.name;
         }
+    },
+
+    // One-click: play loaded audio from the start, record video or a
+    // transparent PNG sequence for its full duration, then auto-download
+    // the recording and a copy of the source audio.
+    playAndRecord(mode = 'video') {
+        if (audio.mic) { this.toast('Mic input can\'t be auto-recorded. Load a file or use TTS.'); return; }
+        if (!audio.el.src) { this.toast('Load an audio file first'); return; }
+        if (STATE.recording || STATE.recordingPng) { this.toast('Already recording'); return; }
+
+        const usePng = mode === 'png-alpha';
+        const btns = [
+            document.getElementById('btn-play-record'),
+            document.getElementById('btn-play-record-alpha')
+        ];
+        btns.forEach(b => b && (b.disabled = true));
+
+        audio.resume();
+
+        const el = audio.el;
+        let fadeOutArmed = false;
+        const cleanup = () => {
+            el.removeEventListener('ended', onEnded);
+            el.removeEventListener('error', onError);
+            el.removeEventListener('timeupdate', onTimeUpdate);
+        };
+        const finish = () => {
+            btns.forEach(b => b && (b.disabled = false));
+        };
+        // Trigger fade-out as soon as we're within FADE.OUT_MS of the end,
+        // so the visualizer and audio wind down together rather than cutting.
+        const onTimeUpdate = () => {
+            if (fadeOutArmed) return;
+            const fadeOutMs = Exporter.FADE?.OUT_MS ?? 400;
+            if ((el.duration - el.currentTime) * 1000 <= fadeOutMs + 20) {
+                fadeOutArmed = true;
+                Exporter.triggerFadeOut();
+            }
+        };
+        const onEnded = async () => {
+            cleanup();
+            STATE.playing = false;
+            this.updatePlay();
+            // If the fade-out never fired (very short clip), force it now
+            // so the tail decays rather than hard-cutting.
+            if (!fadeOutArmed) Exporter.triggerFadeOut();
+            // Cool-down: keep recording past the end of the audio so the
+            // visualizer can settle back to rest before we cut the file.
+            this.toast('Cooling down...');
+            await Exporter.waitForCooldown();
+            if (usePng && STATE.recordingPng) {
+                await Exporter.stopPng();
+            } else if (STATE.recording) {
+                Exporter.stopVideo();
+            }
+            // Re-download the source audio, if we have it stashed
+            if (STATE.lastAudioSource?.blob) {
+                setTimeout(() => {
+                    const src = STATE.lastAudioSource;
+                    const url = URL.createObjectURL(src.blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = src.filename || `twill9000_audio_${Date.now()}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                }, 800);
+            } else {
+                this.toast('Recording saved (no audio source to re-download)');
+            }
+            finish();
+        };
+        const onError = () => {
+            cleanup();
+            if (STATE.recording) Exporter.stopVideo();
+            if (STATE.recordingPng) Exporter.stopPng();
+            finish();
+            this.toast('Playback error');
+        };
+
+        el.addEventListener('ended', onEnded);
+        el.addEventListener('error', onError);
+        el.addEventListener('timeupdate', onTimeUpdate);
+
+        // Start recording first so the opening frames are captured
+        if (usePng) {
+            STATE.pngAlpha = true;
+            const alphaToggle = document.getElementById('s-png-alpha');
+            if (alphaToggle) alphaToggle.checked = true;
+            Exporter.startPng();
+        } else {
+            Exporter.startVideo();
+        }
+        el.currentTime = 0;
+        // Start at full volume. Fade-out is triggered near the end via
+        // the timeupdate listener above.
+        audio.setFullVolume();
+        el.play()
+            .then(() => { STATE.playing = true; this.updatePlay(); this.toast('Recording...'); })
+            .catch(err => { cleanup(); if (STATE.recording) Exporter.stopVideo(); if (STATE.recordingPng) Exporter.stopPng(); finish(); this.toast('Play failed: ' + err.message); });
     },
 
     updateMode() {

@@ -27,6 +27,42 @@ class Visualizer {
     }
 
     render(ctx, w, h, freq, transparent) {
+        // Chromakey-safe rendering: the visualizer has dozens of alpha
+        // modulations for fades / breathing / layered glows that make sense
+        // on a dark background but break once the output gets chroma-keyed
+        // \u2014 partially transparent pixels blend with the green and get
+        // eaten by the chromakey filter. We shadow `globalAlpha` on this
+        // context instance so every downstream assignment is pinned to 1.0
+        // for the duration of this frame. Growth/shrinkage animations
+        // still work (size is driven by voice energy, not opacity).
+        //
+        // Side effect: motion trails (fx.trails) and bg pulse use partial
+        // alpha to blend, so they effectively become full bg fills while
+        // this shim is active. Disable those effects for chromakey output.
+        //
+        // We only do this for the opaque main canvas path; the
+        // `transparent` screenshot path keeps real alpha.
+        const pinAlpha = !transparent;
+        let alphaWasShadowed = false;
+        if (pinAlpha) {
+            Object.defineProperty(ctx, 'globalAlpha', {
+                configurable: true,
+                get() { return 1; },
+                set() { /* no-op: keep visuals solid for chromakey */ }
+            });
+            alphaWasShadowed = true;
+        }
+        try {
+            this._renderInner(ctx, w, h, freq, transparent);
+        } finally {
+            if (alphaWasShadowed) {
+                delete ctx.globalAlpha;
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    _renderInner(ctx, w, h, freq, transparent) {
         const cx = w/2, cy = h/2;
         const fx = CONFIG.fx;
 
@@ -248,7 +284,13 @@ class Visualizer {
             // Mirror mode forces hollow (no fill)
             const forceHollow = isMirror;
             const useFillColor = (CONFIG.hollowShape || forceHollow) ? CONFIG.bgColor : fillColor;
-            const useFillAlpha = (CONFIG.hollowShape || forceHollow) ? 1.0 : 0.35 + STATE.sustainedEnergy * 1.3;
+            // Keep the shape fully opaque regardless of voice energy. An
+            // earlier "breathing" effect modulated this with sustainedEnergy
+            // (0.35 at rest, 1.0 at peak) — but with a green chromakey
+            // background the partial transparency lets green show through
+            // the shape during silence. Solid is safer; the bars + ring
+            // animations still carry the reactive feel.
+            const useFillAlpha = 1.0;
             if (isCustom) {
                 const s = shapeR * STATE.customSvgScale;
                 ctx.save();
@@ -312,7 +354,7 @@ class Visualizer {
                     ctx.fillStyle = color;
                 }
 
-                ctx.globalAlpha = 0.4 + val * 0.6;
+                ctx.globalAlpha = 1.0;  // chromakey-safe: bars always solid
 
                 // Outward bar
                 if (fx.roundedBars) {
@@ -358,8 +400,13 @@ class Visualizer {
         // Bars mode: fill AFTER bars (covers bar bases)
         if (!isMirror) drawShapeFill();
 
-        // Hollow stroke border - hugs fill when quiet, separates when loud
-        const ringAlpha = overflow > 0 ? 0.8 + ve * 0.2 : 0.6 + ve * 0.35;
+        // Hollow stroke border - hugs fill when quiet, separates when loud.
+        // Alpha is pinned to 1.0: the old modulation (0.6 at rest -> 0.95
+        // on peak) made the ring visibly fade over silence, which with a
+        // chromakey green background showed green through it. The ring
+        // still reacts to voice energy via width/separation, so it's still
+        // visually alive.
+        const ringAlpha = 1.0;
         const ringWidth = overflow > 0 ? 4.0 + overflow * 22 : 2.5 + ve * 5;
         if (fx.glow) {
             ctx.shadowColor = borderColor;
@@ -462,18 +509,21 @@ class Visualizer {
                 ctx.closePath();
             }
             ctx.strokeStyle = ring.color;
-            ctx.globalAlpha = ring.alpha;
+            // Chromakey-safe: always solid. Ring still grows + thins to
+            // visually dissipate, but no alpha fade that the chromakey
+            // filter can eat.
+            ctx.globalAlpha = 1.0;
             ctx.lineWidth = ring.lineWidth;
             ctx.stroke();
             ctx.restore();
 
-            // Expand and fade
+            // Expand and shrink (no alpha fade; the shrinking lineWidth
+            // provides the "fade out" feel without using transparency).
             const speed = 2 + (ring.maxRadius - ring.radius) * 0.02;
             ring.radius += speed;
-            ring.alpha -= 0.012;
-            ring.lineWidth *= 0.97;
+            ring.lineWidth *= 0.94;  // slightly faster shrink to compensate
 
-            if (ring.alpha <= 0 || ring.radius > ring.maxRadius) {
+            if (ring.lineWidth < 0.5 || ring.radius > ring.maxRadius) {
                 STATE.pulseRings.splice(i, 1);
             }
         }
@@ -491,9 +541,11 @@ class Visualizer {
             const pt = STATE.particles[i];
 
             ctx.beginPath();
+            // Chromakey-safe: size shrinks to zero via pt.life, but alpha
+            // stays at 1.0 so the particle is fully opaque the whole time.
             ctx.arc(pt.x, pt.y, pt.size * pt.life, 0, Math.PI * 2);
             ctx.fillStyle = pt.color;
-            ctx.globalAlpha = pt.life * 0.7;
+            ctx.globalAlpha = 1.0;
             ctx.fill();
 
             // Update position and life
@@ -1160,8 +1212,30 @@ class Visualizer {
         // Main canvas render
         this.render(this.ctx, this.w, this.h, data.freq, false);
         // PNG sequence capture
-        if (STATE.recordingPng && STATE.pngFrames.length < 900) {
-            this.c.toBlob(blob => { if (blob) STATE.pngFrames.push(blob); }, 'image/png');
+        // IMPORTANT: push the toBlob *promise* (not the resolved blob) so the
+        // array preserves capture order. Without this, toBlob callbacks can
+        // resolve out of order (their encode time varies), which shifts the
+        // final video relative to the audio and makes it look like the audio
+        // starts before the visual.
+        if (STATE.recordingPng && STATE.pngFrames.length < STATE.pngFrameCap) {
+            if (STATE.pngAlpha) {
+                // Transparent frames: render to an offscreen alpha canvas without
+                // drawing the background. Matches Exporter.screenshot(true) behavior.
+                if (!this._alphaCanvas || this._alphaCanvas.width !== this.w || this._alphaCanvas.height !== this.h) {
+                    this._alphaCanvas = document.createElement('canvas');
+                    this._alphaCanvas.width = this.w;
+                    this._alphaCanvas.height = this.h;
+                    this._alphaCtx = this._alphaCanvas.getContext('2d', { alpha: true });
+                }
+                this.render(this._alphaCtx, this.w, this.h, data.freq, true);
+                STATE.pngFrames.push(new Promise(res => {
+                    this._alphaCanvas.toBlob(b => res(b), 'image/png');
+                }));
+            } else {
+                STATE.pngFrames.push(new Promise(res => {
+                    this.c.toBlob(b => res(b), 'image/png');
+                }));
+            }
         }
         // JSON frame data capture
         if (STATE.recordingJson) {

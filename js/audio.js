@@ -8,6 +8,11 @@ class AudioEngine {
         this.ctx = new AC();
         this.analyser = this.ctx.createAnalyser();
         this.gain = this.ctx.createGain();
+        // Extra gain node sitting BEFORE the analyser, so when we fade the
+        // signal for the start/end of a clip the visualizer also quiets down
+        // in sync. Fades the audio the speakers/recorder hear AND the
+        // frequency data the bars render from.
+        this.fadeGain = this.ctx.createGain();
         this.dest = this.ctx.createMediaStreamDestination();
         this.analyser.fftSize = CONFIG.fftSize;
         this.analyser.smoothingTimeConstant = CONFIG.smoothing;
@@ -16,7 +21,9 @@ class AudioEngine {
         this.el = new Audio();
         this.el.crossOrigin = 'anonymous';
         this.src = this.ctx.createMediaElementSource(this.el);
-        this.src.connect(this.analyser);
+        // src -> fadeGain -> analyser -> gain -> { speakers, recorder }
+        this.src.connect(this.fadeGain);
+        this.fadeGain.connect(this.analyser);
         this.analyser.connect(this.gain);
         this.freq = new Uint8Array(this.analyser.frequencyBinCount);
         this.wave = new Uint8Array(this.analyser.fftSize);
@@ -25,8 +32,27 @@ class AudioEngine {
         this.el.addEventListener('timeupdate', () => UI.updateSeek());
     }
     resume() { if (this.ctx.state === 'suspended') this.ctx.resume(); }
+
+    // Ramp the pre-analyser gain from `from` to `to` over `ms` milliseconds.
+    // Cancels any pending ramp so repeated calls don't fight.
+    rampFade(from, to, ms) {
+        const t = this.ctx.currentTime;
+        const g = this.fadeGain.gain;
+        g.cancelScheduledValues(t);
+        g.setValueAtTime(from, t);
+        g.linearRampToValueAtTime(to, t + Math.max(0.001, ms / 1000));
+    }
+    fadeOut(ms = 400) { this.rampFade(this.fadeGain.gain.value, 0, ms); }
+    // Instant full volume. Used to (a) reset after a prior fade-out and
+    // (b) make sure plain playback (Play button, mic) isn't silenced.
+    setFullVolume() {
+        const t = this.ctx.currentTime;
+        this.fadeGain.gain.cancelScheduledValues(t);
+        this.fadeGain.gain.setValueAtTime(1, t);
+    }
     playFile(url) {
         this.resume(); this.stopMic();
+        this.setFullVolume();
         this.el.src = url;
         this.el.play().then(() => { STATE.playing = true; UI.updatePlay(); UI.toast('Audio loaded'); }).catch(e => UI.toast('Error: ' + e.message));
     }
@@ -34,12 +60,19 @@ class AudioEngine {
         this.resume();
         if (this.mic) return;
         if (!this.el.src) { UI.toast('Load audio first'); return; }
-        if (this.el.paused) { this.el.play(); STATE.playing = true; } else { this.el.pause(); STATE.playing = false; }
+        if (this.el.paused) {
+            // Ensure the fade-gain isn't still silenced from a prior recording.
+            this.setFullVolume();
+            this.el.play(); STATE.playing = true;
+        } else {
+            this.el.pause(); STATE.playing = false;
+        }
         UI.updatePlay();
     }
-    stop() { this.el.pause(); this.el.currentTime = 0; STATE.playing = false; UI.updatePlay(); }
+    stop() { this.el.pause(); this.el.currentTime = 0; STATE.playing = false; this.setFullVolume(); UI.updatePlay(); }
     async startMic() {
         this.resume(); this.stop();
+        this.setFullVolume();
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             this.mic = this.ctx.createMediaStreamSource(stream);

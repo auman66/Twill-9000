@@ -17,6 +17,74 @@
         <div class="panel-content">
 
         <div class="section">
+            <h3>Batch (CSV)</h3>
+            <div class="status" style="font-size:10px;line-height:1.4;">CSV with required columns <code>name,script</code>. Optional per-row override columns: <code>voice_id, model, stability, similarity, style, speed</code>. Blank cells inherit from the sidebar. Per-row changes do <b>not</b> cascade to later rows. <a href="batch-example.csv" download style="color:var(--accent);">Basic example</a> · <a href="batch-example-overrides.csv" download style="color:var(--accent);">Overrides example</a></div>
+            <button class="btn" id="btn-batch-choose">Choose CSV...</button>
+            <input type="file" id="batch-file-input" accept=".csv,text/csv">
+            <div class="status" id="batch-file-status" style="font-size:11px;">No file loaded</div>
+
+            <div class="shape-label" style="margin-top:8px;">Output Mode</div>
+            <select id="batch-mode" class="tts-input">
+                <option value="mp3">MP3 only (fastest, no video)</option>
+                <option value="webm" selected>Opaque WebM (video + audio baked in)</option>
+                <option value="png">Transparent PNG ZIP + MP3 (needs convert-all.sh)</option>
+            </select>
+
+            <div class="btn-row">
+                <button class="btn" id="btn-batch-run" disabled>▶ Run Batch</button>
+                <button class="btn" id="btn-batch-stop" disabled>■ Stop</button>
+            </div>
+
+            <div class="status" id="batch-progress" style="font-size:11px;line-height:1.4;"></div>
+            <progress id="batch-progress-bar" value="0" max="1" style="width:100%;display:none;height:8px;margin-top:4px;"></progress>
+
+            <div id="batch-post" style="display:none;margin-top:8px;">
+                <div class="shape-label">Post-Batch Script</div>
+                <select id="batch-convert-target" class="tts-input">
+                    <option value="mov">.mov (HEVC alpha — Keynote/QuickTime)</option>
+                    <option value="webm">.webm (VP9 alpha — Chrome/Slides)</option>
+                    <option value="mp4">.mp4 (H.264 opaque — universal)</option>
+                </select>
+                <button class="btn" id="btn-batch-download-script">Download script</button>
+                <div class="status" style="font-size:10px;line-height:1.4;">PNG-mode batches: unzips + muxes each clip with its MP3. WebM-mode batches (with chromakey preset): chromakeys the green out to a transparent video. Run the script with <code>bash script.sh</code> in the folder where the recordings are. Requires <code>ffmpeg</code>.</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>Text to Speech</h3>
+            <div class="shape-label">ElevenLabs API Key</div>
+            <input type="password" id="tts-api-key" class="tts-input" placeholder="sk_..." autocomplete="off">
+            <div class="status" style="font-size:10px;margin-top:-2px;">Stored locally in your browser. Never sent anywhere except elevenlabs.io.</div>
+            <div class="shape-label" style="margin-top:8px;">Voice ID</div>
+            <input type="text" id="tts-voice-id" class="tts-input" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM" autocomplete="off">
+            <div class="shape-label" style="margin-top:8px;">Model</div>
+            <select id="tts-model" class="tts-input">
+                <option value="eleven_flash_v2_5" selected>Flash v2.5 — fastest, 32 langs</option>
+                <option value="eleven_v3">v3 — most expressive, 70+ langs</option>
+                <option value="eleven_multilingual_v2">Multilingual v2 — high quality, 29 langs</option>
+                <option value="eleven_flash_v2">Flash v2 — fastest, English only</option>
+            </select>
+            <div class="shape-label" style="margin-top:8px;">Script</div>
+            <textarea id="tts-script" class="tts-input tts-textarea" placeholder="Type the script to be spoken..." rows="5"></textarea>
+
+            <div class="shape-label" style="margin-top:8px;">Voice Tuning</div>
+            <div class="row"><label>Stability</label><input type="range" id="tts-stability" min="0" max="1" step="0.05" value="0.5"><input type="number" id="tts-stability-num" min="0" max="1" step="0.05" value="0.5"></div>
+            <div class="row"><label>Similarity</label><input type="range" id="tts-similarity" min="0" max="1" step="0.05" value="0.75"><input type="number" id="tts-similarity-num" min="0" max="1" step="0.05" value="0.75"></div>
+            <div class="row"><label>Style</label><input type="range" id="tts-style" min="0" max="1" step="0.05" value="0"><input type="number" id="tts-style-num" min="0" max="1" step="0.05" value="0"></div>
+            <div class="row"><label>Speed</label><input type="range" id="tts-speed" min="0.7" max="1.2" step="0.05" value="1"><input type="number" id="tts-speed-num" min="0.7" max="1.2" step="0.05" value="1"></div>
+
+            <div class="row"><label>Auto-record video</label><label class="toggle"><input type="checkbox" id="tts-auto-record" checked><span></span></label></div>
+            <div class="btn-row">
+                <button class="btn" id="btn-tts-generate">Generate Audio</button>
+                <button class="btn" id="btn-tts-generate-record">Generate & Record</button>
+            </div>
+            <button class="btn" id="btn-tts-one-click">✨ Generate, Record & Download Both</button>
+            <button class="btn" id="btn-tts-one-click-alpha">✨ Generate + Transparent PNG Recording</button>
+            <button class="btn" id="btn-tts-download" style="display:none;">⬇ Download MP3</button>
+            <div class="status" id="tts-status"></div>
+        </div>
+
+        <div class="section">
             <h3>Audio Source</h3>
             <div class="btn-row">
                 <button class="btn" id="btn-upload">Upload File</button>
@@ -26,6 +94,8 @@
                 <button class="btn" id="btn-play">▶ Play</button>
                 <button class="btn" id="btn-stop">■ Stop</button>
             </div>
+            <button class="btn" id="btn-play-record">✨ Play, Record & Download Both</button>
+            <button class="btn" id="btn-play-record-alpha">✨ Play + Transparent PNG Recording</button>
             <div class="row"><label>Volume</label><input type="range" id="vol-slider" min="0" max="1.5" step="0.05" value="0.8"><input type="number" id="vol-slider-num" min="0" max="1.5" step="0.05" value="0.8"></div>
             <div class="row"><label>Seek</label><input type="range" id="seek-bar" min="0" max="100" value="0" step="0.1"></div>
             <div class="status" id="status-text">No audio loaded</div>
@@ -141,6 +211,7 @@
             <div class="row"><label>Color</label><input type="color" id="s-bg-color" value="#050505" style="width:50px;height:26px;border:1px solid var(--border);background:none;cursor:pointer;"></div>
             <button class="btn" id="btn-bg-image">Set Background Image</button>
             <button class="btn" id="btn-bg-clear" style="display:none;">Clear Background Image</button>
+            <button class="btn" id="btn-bg-chromakey" title="Sets background to pure green and disables background effects so you can chromakey it out in post">🟢 Chromakey Green Preset</button>
             <input type="file" id="bg-file-input" accept="image/*">
 
             <div class="shape-label" style="margin-top:8px;">Post Effects</div>
@@ -173,6 +244,24 @@
             <div class="shape-label" style="margin-top:8px;">Record</div>
             <button class="btn" id="btn-record-video">Record Video</button>
             <button class="btn" id="btn-record-png">Record PNG Sequence</button>
+            <div class="row"><label>Transparent PNGs</label><label class="toggle"><input type="checkbox" id="s-png-alpha"><span></span></label></div>
+
+            <div class="shape-label" style="margin-top:10px;">Assemble Video from Last PNG Recording</div>
+            <div class="status" id="assemble-hint" style="font-size:11px;line-height:1.4;">Record a PNG sequence to get copy-paste commands.</div>
+            <button class="btn" id="btn-copy-mov" disabled>Copy .mov (HEVC + alpha — Keynote/QuickTime)</button>
+            <button class="btn" id="btn-copy-webm" disabled>Copy .webm (VP9 + alpha — Chrome/Slides)</button>
+            <button class="btn" id="btn-copy-mp4" disabled>Copy .mp4 (H.264 opaque — universal)</button>
+            <pre id="assemble-cmd-output" class="assemble-cmd" style="display:none;"></pre>
+            <div class="status" style="font-size:10px;line-height:1.4;">Requires <code>ffmpeg</code> installed (<code>brew install ffmpeg</code>). Run the commands from the folder containing the downloaded ZIP + MP3 (usually <code>~/Downloads</code>).</div>
+
+            <div class="shape-label" style="margin-top:14px;">🟢 Chromakey a Recorded WebM</div>
+            <div class="status" style="font-size:10px;line-height:1.4;">Record an opaque WebM with the green chromakey preset on. Paste the WebM filename below, pick a target, and copy the command. The green gets keyed out in post, producing a real transparent video. If you also have the matching ElevenLabs MP3, paste that too to keep voice quality pristine (otherwise the Opus audio inside the WebM gets re-encoded).</div>
+            <input type="text" id="chromakey-input-file" class="tts-input" placeholder="twill9000_1738100000000.webm" autocomplete="off">
+            <input type="text" id="chromakey-audio-file" class="tts-input" placeholder="matching .mp3 (optional, improves audio)" autocomplete="off">
+            <button class="btn" id="btn-chromakey-mov">Copy .mov (HEVC alpha)</button>
+            <button class="btn" id="btn-chromakey-webm">Copy .webm (VP9 alpha)</button>
+            <button class="btn" id="btn-chromakey-mp4">Copy .mp4 (opaque, no chromakey)</button>
+            <pre id="chromakey-cmd-output" class="assemble-cmd" style="display:none;"></pre>
             <div class="shape-label" style="margin-top:8px;">Data</div>
             <button class="btn" id="btn-export-json">Export Frame Data (JSON)</button>
             <div class="status" id="export-status"></div>
@@ -198,6 +287,9 @@
     <script src="js/audio.js"></script>
     <script src="js/visualizer-engine.js"></script>
     <script src="js/exporter.js"></script>
+    <script src="js/assembler.js"></script>
+    <script src="js/tts.js"></script>
+    <script src="js/batch.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/app.js"></script>
 </body>

@@ -100,6 +100,17 @@ const STATE = {
     emphasisTimer: 0, emphasisHistory: [],
     // export
     pngFrames: [], jsonFrames: [], recordingPng: false, recordingJson: false,
+    pngAlpha: false,  // when true, record PNG frames with transparent background
+    // Upper bound on PNG sequence length (frames). At 30fps, 1800 = 60s.
+    // Memory is the constraint: each transparent 1080p PNG is ~1MB,
+    // so 1800 frames ~= 1.8GB of browser memory during capture.
+    pngFrameCap: 1800,
+    // Last audio source loaded into the player (File or Blob + filename)
+    // so the "Play & Record" button can re-download it alongside the video.
+    lastAudioSource: null,
+    // Frames + metadata from the most recent PNG-sequence capture, retained
+    // so the Assembler can mux them into a video without re-uploading.
+    lastPngCapture: null,
     mediaRecorder: null, recordedChunks: [],
     bgImageEl: null,
     // VFX state

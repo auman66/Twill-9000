@@ -1,0 +1,10 @@
+name,script,voice_id,model,stability,similarity,style,speed
+default-uniform-1,"This clip uses every setting from the sidebar. All override columns are blank.",,,,,,
+default-uniform-2,"This one is also uniform. Blank cells inherit from the sidebar defaults.",,,,,,
+more-expressive,"Here I drop stability to make this line sound more emotional.",,,0.25,,,
+faster-delivery,"This clip speaks faster. Only the speed column is filled; everything else comes from the sidebar.",,,,,,1.15
+slower-and-serious,"This one is slower AND more monotone. Both style and speed are filled on this row only.",,,0.85,,0,0.85
+back-to-default,"After the three custom rows above, this clip is back to the sidebar defaults because all my overrides are blank again. Per-row changes do NOT cascade.",,,,,,
+different-voice,"This one uses a totally different voice. The voice_id column overrides only for this row.",21m00Tcm4TlvDq8ikWAM,,,,,
+different-voice-and-model,"You can mix any overrides. Here I change both the voice and the model.",pNInz6obpgDQGcFmaJgB,eleven_flash_v2_5,,,,
+final-clip,"One more uniform clip to show the defaults come back by themselves.",,,,,,
